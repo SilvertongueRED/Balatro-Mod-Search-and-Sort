@@ -7,7 +7,7 @@
 --- BADGE_COLOUR: 5A2D82
 --- BADGE_TEXT_COLOUR: FFFFFF
 --- DISPLAY_NAME: Mod Sort
---- VERSION: 2.0.0
+--- VERSION: 2.1.0
 --- PREFIX: bms
 
 -- Balatro Mod Sort (display-only)
@@ -80,9 +80,9 @@ end
 
 local SORT_MODES  = { "alpha", "updated", "config" }
 local SORT_LABELS = {
-  alpha   = "Sort: A→Z",
-  updated = "Sort: Recently Updated",
-  config  = "Sort: Config Changed",
+  alpha   = "A to Z",
+  updated = "Last Updated",
+  config  = "Config Changed",
 }
 
 local _current_sort = "alpha"
@@ -322,34 +322,49 @@ end
 -- Sort-mode button (appears at the top of the mod list)
 ----------------------------------------------------------------------
 
+local function _peek_next_sort()
+  for i, m in ipairs(SORT_MODES) do
+    if m == _current_sort then
+      return SORT_MODES[(i % #SORT_MODES) + 1]
+    end
+  end
+  return SORT_MODES[1]
+end
+
+-- Two parts side by side, both the same fixed width so the row is always symmetrical:
+--   [ Now: <current sort> ]  (info only, not clickable)
+--   [ Next: <next sort>   ]  (the button - click / press A to switch to that sort)
 local function _sort_button_row()
-  local btn_colour = HEX and HEX("5A2D82") or {0.35, 0.18, 0.51, 1}
+  local btn_colour  = HEX and HEX("5A2D82") or {0.35, 0.18, 0.51, 1}
+  local pill_colour = HEX and HEX("2B2B35") or {0.17, 0.17, 0.21, 1}
+  local dim_text    = HEX and HEX("A9A9B8") or {0.66, 0.66, 0.72, 1}
+  local scale = 0.27
+  local cur  = SORT_LABELS[_current_sort] or SORT_LABELS.alpha
+  local nxt  = SORT_LABELS[_peek_next_sort()] or SORT_LABELS.alpha
   return {
     n = G.UIT.R,
     config = { padding = 0.05, align = "cm" },
-    nodes = {{
-      n = G.UIT.C,
-      config = {
-        align = "cm",
-        padding = 0.07,
-        r = 0.1,
-        minw = 2.5,
-        minh = 0.36,
-        colour = btn_colour,
-        hover = true,
-        shadow = true,
-        button = "bms_cycle_sort",
-      },
-      nodes = {{
-        n = G.UIT.T,
-        config = {
-          text = SORT_LABELS[_current_sort] or SORT_LABELS.alpha,
-          scale = 0.3,
-          colour = G.C.WHITE,
-          shadow = true,
+    nodes = {
+      {
+        n = G.UIT.C,
+        config = { align = "cm", padding = 0.07, r = 0.1, minw = 2.4, minh = 0.36, colour = pill_colour },
+        nodes = {
+          { n = G.UIT.T, config = { text = "Now: ", scale = scale, colour = dim_text } },
+          { n = G.UIT.T, config = { text = cur, scale = scale, colour = G.C.WHITE, shadow = true } },
         }
-      }}
-    }}
+      },
+      { n = G.UIT.C, config = { minw = 0.12 }, nodes = {} },
+      {
+        n = G.UIT.C,
+        config = {
+          align = "cm", padding = 0.07, r = 0.1, minw = 2.4, minh = 0.36,
+          colour = btn_colour, hover = true, shadow = true, button = "bms_cycle_sort",
+        },
+        nodes = {
+          { n = G.UIT.T, config = { text = "Next: " .. nxt, scale = scale, colour = G.C.WHITE, shadow = true } },
+        }
+      },
+    }
   }
 end
 
