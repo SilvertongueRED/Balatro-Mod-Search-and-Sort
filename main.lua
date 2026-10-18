@@ -7,7 +7,7 @@
 --- BADGE_COLOUR: 5A2D82
 --- BADGE_TEXT_COLOUR: FFFFFF
 --- DISPLAY_NAME: Balatro Mod Search and Sort
---- VERSION: 2.2.0
+--- VERSION: 2.2.1
 --- PREFIX: bms
 
 -- Balatro Mod Search and Sort (display-only)
