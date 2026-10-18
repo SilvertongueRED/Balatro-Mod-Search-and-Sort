@@ -1310,17 +1310,31 @@ end
 -- After pressing one of the two buttons the list (and with it the button) is
 -- rebuilt; put the controller focus back on the new button so the player can
 -- keep pressing it or step to its neighbour.
-local function _refocus_button(id)
-  pcall(function()
-    local c = G.CONTROLLER
-    if not (c and c.HID and c.HID.controller and G.OVERLAY_MENU and G.OVERLAY_MENU.get_UIE_by_ID) then return end
-    local node = G.OVERLAY_MENU:get_UIE_by_ID(id)
-    if node and c:is_node_focusable(node) then
+local _last_button_focus = nil
+local function _refocus_button(id, tries)
+  tries = tries or 0
+  local c = G.CONTROLLER
+  if not (c and c.HID and c.HID.controller) then return end
+  if tries == 0 then _last_button_focus = id end
+  -- The list is rebuilt by an event, so the button may not exist (or be ready) yet on
+  -- this frame. Try now, and again on the next few frames. An empty list (Showing:
+  -- Disabled with nothing to show) rebuilds too, so it is covered the same way.
+  local ok, done = pcall(function()
+    local node = G.OVERLAY_MENU and G.OVERLAY_MENU.get_UIE_by_ID and G.OVERLAY_MENU:get_UIE_by_ID(id)
+    if node and node.states and node.states.visible ~= false then
       c.focused.target = node
       node.states.focus.is = true
       c:update_cursor()
+      return true
     end
+    return false
   end)
+  if not (ok and done) and tries < 12 then
+    G.E_MANAGER:add_event(Event({
+      trigger = "after", delay = 0.02, timer = "REAL", blocking = false, blockable = false,
+      func = function() _refocus_button(id, tries + 1) return true end,
+    }))
+  end
 end
 
 -- Hotkey: S (keyboard) or R3 (press the right stick) jumps to the search box and
@@ -1544,11 +1558,34 @@ local function _install_extras()
     _next_filter_mode()
     _apply_view_change()
     _refocus_button(BTN_FILTER_ID)
+    -- the list may be rebuilt again a moment later (empty result, pager change): look again then
+    G.E_MANAGER:add_event(Event({
+      trigger = "after", delay = 0.1, timer = "REAL", blocking = false, blockable = false,
+      func = function() _refocus_button(BTN_FILTER_ID) return true end,
+    }))
   end
 
   -- Runs every frame on a node in the search row: re-filter when the text changed.
   G.FUNCS.bms_search_watch = function(_e)
     _heal_list_if_displaced()
+    -- Safety net for the filter/sort buttons: if the controller has lost its focus while the
+    -- Mods menu is open (e.g. the list is empty), put it back on the button the player used.
+    pcall(function()
+      local c = G.CONTROLLER
+      if not (c and c.HID and c.HID.controller and _last_button_focus and G.OVERLAY_MENU) then return end
+      local t = c.focused and c.focused.target
+      local alive = t ~= nil and t.states ~= nil and t.states.visible ~= false
+      -- a button that was rebuilt leaves the old object behind (still "visible", but no longer in
+      -- the menu): focus on it is stale and must be moved to the live button
+      if alive and t.config and t.config.id and G.OVERLAY_MENU.get_UIE_by_ID then
+        local live = G.OVERLAY_MENU:get_UIE_by_ID(t.config.id)
+        if live ~= nil and live ~= t then alive = false end
+      end
+      if not alive and G.OVERLAY_MENU:get_UIE_by_ID("bms_search_row") then
+        _diag("controller focus was lost (target=" .. tostring(t and t.config and (t.config.id or t.config.button)) .. "), restoring " .. _last_button_focus)
+        _refocus_button(_last_button_focus)
+      end
+    end)
     if _hold_tick then pcall(_hold_tick) end
     local _, normalised = _normalise_query(_search.text)
     if normalised ~= _applied_query then

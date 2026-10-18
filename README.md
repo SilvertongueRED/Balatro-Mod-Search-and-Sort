@@ -40,6 +40,7 @@ Drop the `Balatro-Mod-Search-and-Sort` folder into your Balatro `Mods` directory
 - New hotkey: **S** (keyboard) or **R3** (controller) jumps to the search box from anywhere in the Mods menu; a hint is shown beside the page selector.
 - Controller: **LB / RB** now turn the mod list pages and **LT / RT** switch the top tabs (Mods / Credits / Config); the matching glyphs are shown next to the page selector and the tab strip.
 - Holding **S** (keyboard) or **R3** (controller) clears the search; a second hint line next to the page selector says so. A quick tap still jumps to the search box.
+- Fixed: with a controller, pressing the Showing / Next filter button (for example into Disabled, when nothing matches) no longer drops the controller focus off the button.
 - Fixed: after a search, pressing **Clear** with a controller could push the mod list down and to the right; the menu now notices this and re-lays itself out immediately.
 - A small `bms_layout.log` is written in the save folder only if the list layout does something unexpected.
 
