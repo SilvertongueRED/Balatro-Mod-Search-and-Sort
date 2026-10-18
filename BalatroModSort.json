@@ -1,20 +1,20 @@
 {
   "id": "BalatroModSort",
-  "name": "Balatro Mod Sort",
-  "display_name": "Mod Sort",
+  "name": "Balatro Mod Search and Sort",
+  "display_name": "Balatro Mod Search and Sort",
   "author": [
     "SilvertongueRED",
     "ChatGPT",
     "Claude"
   ],
   "icon": "modicon.png",
-  "description": "Sort your Mods menu by name, recently updated, or config changes — without changing load order.",
+  "description": "Search your Mods menu as you type, filter enabled/disabled mods, sort by name, recently updated or config changes, and get a Restart now / Later prompt after toggling mods — without changing load order.",
   "prefix": "bms",
   "main_file": "main.lua",
   "priority": 1000000000,
   "badge_colour": "5A2D82",
   "badge_text_colour": "FFFFFF",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "dependencies": [
     "Steamodded (>=1.*~)"
   ]
