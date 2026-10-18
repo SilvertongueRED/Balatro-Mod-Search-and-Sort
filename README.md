@@ -27,6 +27,10 @@ Drop the `Balatro-Mod-Search-and-Sort` folder into your Balatro `Mods` directory
 
 ## Changelog
 
+### 2.2.2
+- Fixed: holding **S** on the keyboard now clears the search, also while the cursor is still in the search box (S used to just type an "s").
+- Fixed: with a controller, leaving the search box with **B** could leave the on-screen keyboard behind, after which the keyboard and controller stopped responding while the mouse still worked. A leftover keyboard is now closed automatically.
+
 ### 2.2.1
 - Fixed: with a controller, pressing the Showing / Next filter button (for example into Disabled, when nothing matches) no longer drops the controller focus off the button.
 - Holding **S** (keyboard) or **R3** (controller) now clears the search; a quick tap still jumps to the search box.

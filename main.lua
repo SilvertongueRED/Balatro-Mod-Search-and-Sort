@@ -7,7 +7,7 @@
 --- BADGE_COLOUR: 5A2D82
 --- BADGE_TEXT_COLOUR: FFFFFF
 --- DISPLAY_NAME: Balatro Mod Search and Sort
---- VERSION: 2.2.1
+--- VERSION: 2.2.2
 --- PREFIX: bms
 
 -- Balatro Mod Search and Sort (display-only)
@@ -1377,14 +1377,68 @@ local function _hold_end(id)
   if not h.fired then pcall(_focus_search_box) end
 end
 
+-- Is the cursor still inside our own search box?
+local function _own_hook()
+  local h = G and G.CONTROLLER and G.CONTROLLER.text_input_hook
+  return h and h.config and type(h.config.ref_table) == "table" and h.config.ref_table.ref_table == _search
+end
+
+-- The controller's on-screen keyboard is removed by the search box's own per-frame update. If the box is rebuilt first,
+-- the keyboard (and the extra cursor layer it adds) is left behind and keyboard + controller go dead while the mouse
+-- still works. If one is still there half a second after the box lost the cursor, close it the way the game does.
+local _osk_t0 = nil
+local function _close_stale_osk()
+  local C = G and G.CONTROLLER
+  local osk = C and C.screen_keyboard
+  if not osk then return end
+  local par = osk.config and osk.config.parent
+  if par and par.children and par.children.controller_keyboard == osk then par.children.controller_keyboard = nil end
+  pcall(function() osk:remove() end)
+  C.screen_keyboard = nil
+  if C.mod_cursor_context_layer then pcall(C.mod_cursor_context_layer, C, -1) end
+  pcall(_diag, "closed a stale on-screen keyboard")
+end
+
+local _poll = nil  -- keyboard safety net: { t0, ok, fired }
+
 -- called every frame by the search row's watcher
 local function _hold_tick()
-  local h = _hold
-  if not h or h.fired then return end
   local now = (G.TIMERS and G.TIMERS.REAL) or 0
-  if now - h.t0 < HOLD_CLEAR_SECS then return end
-  h.fired = true
-  if G.FUNCS.bms_clear_search then pcall(G.FUNCS.bms_clear_search) end
+  local C = G and G.CONTROLLER
+  if C and C.screen_keyboard and not C.text_input_hook then
+    _osk_t0 = _osk_t0 or now
+    if now - _osk_t0 > 0.5 then _osk_t0 = nil; pcall(_close_stale_osk) end
+  else
+    _osk_t0 = nil
+  end
+  local h = _hold
+  if h and not h.fired and now - h.t0 >= HOLD_CLEAR_SECS then
+    h.fired = true
+    if G.FUNCS.bms_clear_search then pcall(G.FUNCS.bms_clear_search) end
+  end
+  -- Keyboard safety net: ask the keyboard itself whether S is still down. This also covers the cursor still being in
+  -- the search box (then S only types an "s"): holding it for HOLD_CLEAR_SECS clears the box and leaves it.
+  local down = false
+  if love and love.keyboard and love.keyboard.isDown then
+    local ok, d = pcall(love.keyboard.isDown, "s")
+    down = (ok and d) and true or false
+  end
+  local p = _poll
+  if not down then
+    _poll = nil
+  elseif not p then
+    local usable = _search_available()
+    if not usable and _own_hook() and G.OVERLAY_MENU and G.OVERLAY_MENU.get_UIE_by_ID
+       and G.OVERLAY_MENU:get_UIE_by_ID("bms_search_row") then usable = true end
+    _poll = { t0 = now, ok = usable and true or false, fired = false }
+  elseif p.ok and not p.fired and now - p.t0 >= HOLD_CLEAR_SECS then
+    p.fired = true
+    local h2 = _hold
+    if h2 and h2.fired then return end   -- the normal path already cleared it
+    if h2 then h2.fired = true end        -- so letting go does not jump into the box
+    if G.FUNCS.bms_clear_search then pcall(G.FUNCS.bms_clear_search) end
+    pcall(_drop_stale_hook)
+  end
 end
 
 local function _guard_hotkeys()

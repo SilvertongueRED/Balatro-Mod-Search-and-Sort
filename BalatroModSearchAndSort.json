@@ -14,7 +14,7 @@
   "priority": 1000000000,
   "badge_colour": "5A2D82",
   "badge_text_colour": "FFFFFF",
-  "version": "2.2.1",
+  "version": "2.2.2",
   "dependencies": [
     "Steamodded (>=1.*~)"
   ]
