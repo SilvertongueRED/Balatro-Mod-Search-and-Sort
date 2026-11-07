@@ -7,7 +7,7 @@
 --- BADGE_COLOUR: 5A2D82
 --- BADGE_TEXT_COLOUR: FFFFFF
 --- DISPLAY_NAME: Balatro Mod Search and Sort
---- VERSION: 2.2.2
+--- VERSION: 2.2.3
 --- PREFIX: bms
 
 -- Balatro Mod Search and Sort (display-only)
@@ -20,7 +20,7 @@
 -- Sort modes:
 --   A→Z             – alphabetical by display name (default)
 --   Recently Updated – by mod file modification time (newest first)
---   Config Changed   – by config file modification time (newest first)
+--   Config Changed   - by when the mod's config contents last changed (newest first)
 
 ----------------------------------------------------------------------
 -- Helpers
@@ -161,26 +161,108 @@ local function _mod_update_time(mod)
   return _file_modtime(mod.path)
 end
 
--- Most-recent modification time of a mod's saved config file.
+-- "Config Changed" tracking.
+--
+-- A mod's config FILE time cannot be used: Steamodded rewrites the config file of
+-- every loaded mod each time the Mods menu is left (SMODS.save_all_config), so all
+-- the files get the same time and the sort fell back to A to Z. Instead we remember
+-- a fingerprint of each mod's config contents and note the time we first see it
+-- differ. That time is what "Config Changed" sorts by (newest first).
+local _CFG_TRACK_PATH = "config/BalatroModSort_cfgtimes.txt"
+local _cfg_records = nil   -- id -> { t = epoch seconds of last change (0 = unknown), sig = fingerprint }
+
+local function _cfg_serialize(v, depth, seen)
+  local tv = type(v)
+  if tv == "number" or tv == "boolean" then return tostring(v) end
+  if tv == "string" then return string.format("%q", v) end
+  if tv ~= "table" then return "" end  -- functions / userdata are not config data
+  if depth > 8 or seen[v] then return "~" end
+  seen[v] = true
+  local items = {}
+  for k, val in pairs(v) do items[#items + 1] = { type(k) .. ":" .. tostring(k), val } end
+  table.sort(items, function(x, y) return x[1] < y[1] end)
+  local out = {}
+  for _, it in ipairs(items) do
+    out[#out + 1] = it[1] .. "=" .. _cfg_serialize(it[2], depth + 1, seen)
+  end
+  seen[v] = nil
+  return "{" .. table.concat(out, ",") .. "}"
+end
+
+local function _cfg_signature(cfg)
+  local s = _cfg_serialize(cfg, 0, {})
+  local h1, h2 = 5381, 52711
+  for i = 1, #s do
+    local b = s:byte(i)
+    h1 = (h1 * 33 + b) % 4294967296
+    h2 = (h2 * 131 + b) % 4294967291
+  end
+  return string.format("%d-%.0f-%.0f", #s, h1, h2)
+end
+
+local function _cfg_load()
+  if _cfg_records then return _cfg_records end
+  _cfg_records = {}
+  pcall(function()
+    if love and love.filesystem and type(love.filesystem.read) == "function" then
+      local data = love.filesystem.read(_CFG_TRACK_PATH)
+      if type(data) == "string" then
+        for line in data:gmatch("[^\r\n]+") do
+          local id, t, sig = line:match("^(.-)\t(%d+)\t(.+)$")
+          if id then _cfg_records[id] = { t = tonumber(t) or 0, sig = sig } end
+        end
+      end
+    end
+  end)
+  return _cfg_records
+end
+
+local function _cfg_save()
+  pcall(function()
+    if love and love.filesystem and type(love.filesystem.write) == "function" then
+      local ids = {}
+      for id in pairs(_cfg_records or {}) do ids[#ids + 1] = id end
+      table.sort(ids)
+      local lines = {}
+      for _, id in ipairs(ids) do
+        local r = _cfg_records[id]
+        lines[#lines + 1] = id .. "\t" .. tostring(math.floor(r.t or 0)) .. "\t" .. r.sig
+      end
+      love.filesystem.write(_CFG_TRACK_PATH, table.concat(lines, "\n") .. "\n")
+    end
+  end)
+end
+
+-- Compare every mod's current config with what was seen last time and stamp the
+-- ones that differ. The first time a mod is seen it only gets a baseline (time 0).
+local function _track_config_changes()
+  local rec = _cfg_load()
+  local dirty = false
+  local now = os.time()
+  for _, m in ipairs((SMODS and SMODS.mod_list) or {}) do
+    if m.id then
+      local ok, sig = pcall(_cfg_signature, m.config)
+      if ok then
+        local r = rec[m.id]
+        if not r then
+          rec[m.id] = { t = 0, sig = sig }
+          dirty = true
+        elseif r.sig ~= sig then
+          r.sig = sig
+          r.t = now
+          dirty = true
+        end
+      end
+    end
+  end
+  if dirty then _cfg_save() end
+end
+
+-- When this mod's config last changed (epoch seconds), or 0 if never seen changing.
 local function _config_change_time(mod)
   if not mod or not mod.id then return 0 end
-  -- Only meaningful for mods that expose configuration.
-  if not (mod.config_tab or mod.config) then return 0 end
-  -- Steamodded stores per-mod config under the save directory.
-  local save = ""
-  if love and love.filesystem and type(love.filesystem.getSaveDirectory) == "function" then
-    save = love.filesystem.getSaveDirectory()
-  end
-  local candidates = {}
-  if save ~= "" then
-    table.insert(candidates, save .. "/config/" .. mod.id .. ".jkr")
-  end
-  table.insert(candidates, "config/" .. mod.id .. ".jkr")
-  for _, p in ipairs(candidates) do
-    local t = _file_modtime(p)
-    if t > 0 then return t end
-  end
-  return 0
+  local r = _cfg_load()[mod.id]
+  return (r and r.t) or 0
 end
 
 ----------------------------------------------------------------------
@@ -195,6 +277,13 @@ local _ts_cache = { updated = {}, config = {} }
 local function _sorted_copy(mod_list)
   local t = {}
   for i, v in ipairs(mod_list or {}) do t[i] = v end
+
+  -- Notice config changes once per menu build (the cache is rebuilt then), in every
+  -- sort mode, so changes made while sorted A to Z are still recorded.
+  if not _ts_cache.cfg_done then
+    _ts_cache.cfg_done = true
+    pcall(_track_config_changes)
+  end
 
   if _current_sort == "updated" then
     local cache = _ts_cache.updated
