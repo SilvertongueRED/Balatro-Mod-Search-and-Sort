@@ -7,7 +7,7 @@
 --- BADGE_COLOUR: 5A2D82
 --- BADGE_TEXT_COLOUR: FFFFFF
 --- DISPLAY_NAME: Balatro Mod Search and Sort
---- VERSION: 2.2.3
+--- VERSION: 2.2.4
 --- PREFIX: bms
 
 -- Balatro Mod Search and Sort (display-only)
@@ -200,6 +200,70 @@ local function _cfg_signature(cfg)
   return string.format("%d-%.0f-%.0f", #s, h1, h2)
 end
 
+-- Some mods keep their settings outside mod.config: in a global table (Trance has
+-- Trance_config) and/or in their own file in the config folder (config/Trance.lua).
+-- Both are fingerprinted as well. Files Steamodded itself rewrites (.jkr) are skipped.
+local function _cfg_global_sig(id)
+  local lo, up = id:lower(), id:upper()
+  local names = { id .. "_config", id .. "_Config", id .. "Config", id .. "_cfg",
+                  lo .. "_config", lo .. "config", up .. "_CONFIG" }
+  local seen_names, parts = {}, {}
+  for _, n in ipairs(names) do
+    if not seen_names[n] then
+      seen_names[n] = true
+      local ok, v = pcall(rawget, _G, n)
+      if ok and type(v) == "table" then
+        local ok2, str = pcall(_cfg_serialize, v, 0, {})
+        if ok2 then parts[#parts + 1] = n .. "=" .. str end
+      end
+    end
+  end
+  if #parts == 0 then return "" end
+  return _cfg_signature(table.concat(parts, ";"))
+end
+
+-- Returns: fingerprint of the mod's own config-folder files (name + time + size), and
+-- the newest modification time among them.
+local function _cfg_files_sig(id, listing)
+  local lo = id:lower()
+  local parts, newest = {}, 0
+  for _, f in ipairs(listing or {}) do
+    local stem, ext = f.name:match("^(.*)%.([^.]+)$")
+    if stem and ext:lower() ~= "jkr" then
+      local sl = stem:lower()
+      if (sl == lo or sl:sub(1, #lo + 1) == lo .. "_") and sl:sub(1, 14) ~= "balatromodsort" then
+        -- fingerprint the CONTENT (not the time): a mod may rewrite the same
+        -- settings every time its Options menu opens, which is not a change
+        local body = ""
+        if f.size <= 65536 then
+          local okr, data = pcall(love.filesystem.read, "config/" .. f.name)
+          if okr and type(data) == "string" then body = data end
+        end
+        parts[#parts + 1] = f.name .. ":" .. _cfg_signature(body)
+        if f.t > newest then newest = f.t end
+      end
+    end
+  end
+  table.sort(parts)
+  if #parts == 0 then return "", 0 end
+  return table.concat(parts, ";"), newest
+end
+
+local function _cfg_folder_listing()
+  local out = {}
+  pcall(function()
+    if love and love.filesystem and type(love.filesystem.getDirectoryItems) == "function" then
+      for _, name in ipairs(love.filesystem.getDirectoryItems("config")) do
+        local info = love.filesystem.getInfo("config/" .. name)
+        if info and info.type == "file" then
+          out[#out + 1] = { name = name, t = info.modtime or 0, size = info.size or 0 }
+        end
+      end
+    end
+  end)
+  return out
+end
+
 local function _cfg_load()
   if _cfg_records then return _cfg_records end
   _cfg_records = {}
@@ -208,8 +272,12 @@ local function _cfg_load()
       local data = love.filesystem.read(_CFG_TRACK_PATH)
       if type(data) == "string" then
         for line in data:gmatch("[^\r\n]+") do
-          local id, t, sig = line:match("^(.-)\t(%d+)\t(.+)$")
-          if id then _cfg_records[id] = { t = tonumber(t) or 0, sig = sig } end
+          -- id TAB time TAB config-sig [TAB global-sig TAB files-sig]  (older files have 3 columns)
+          local f = {}
+          for col in (line .. "\t"):gmatch("(.-)\t") do f[#f + 1] = col end
+          if f[1] and f[2] and f[3] then
+            _cfg_records[f[1]] = { t = tonumber(f[2]) or 0, sig = f[3], gsig = f[4], fsig = f[5] }
+          end
         end
       end
     end
@@ -226,31 +294,48 @@ local function _cfg_save()
       local lines = {}
       for _, id in ipairs(ids) do
         local r = _cfg_records[id]
-        lines[#lines + 1] = id .. "\t" .. tostring(math.floor(r.t or 0)) .. "\t" .. r.sig
+        lines[#lines + 1] = table.concat({ id, tostring(math.floor(r.t or 0)), r.sig,
+                                           r.gsig or "", r.fsig or "" }, "\t")
       end
       love.filesystem.write(_CFG_TRACK_PATH, table.concat(lines, "\n") .. "\n")
     end
   end)
 end
 
--- Compare every mod's current config with what was seen last time and stamp the
--- ones that differ. The first time a mod is seen it only gets a baseline (time 0).
+-- Compare every mod's current settings with what was seen last time and stamp the
+-- ones that differ. The first time a mod is seen it only gets a baseline; a mod with
+-- its own config file starts at that file's time.
 local function _track_config_changes()
   local rec = _cfg_load()
+  local listing = _cfg_folder_listing()
   local dirty = false
   local now = os.time()
   for _, m in ipairs((SMODS and SMODS.mod_list) or {}) do
     if m.id then
       local ok, sig = pcall(_cfg_signature, m.config)
-      if ok then
+      local ok2, gsig = pcall(_cfg_global_sig, m.id)
+      local ok3, fsig, fnewest = pcall(_cfg_files_sig, m.id, listing)
+      if ok and ok2 and ok3 then
         local r = rec[m.id]
         if not r then
-          rec[m.id] = { t = 0, sig = sig }
+          rec[m.id] = { t = fnewest, sig = sig, gsig = gsig, fsig = fsig }
           dirty = true
-        elseif r.sig ~= sig then
-          r.sig = sig
-          r.t = now
-          dirty = true
+        else
+          local changed_now = false
+          if r.sig ~= sig then r.sig = sig; changed_now = true end
+          if r.gsig ~= nil and r.gsig ~= gsig then changed_now = true end
+          if r.gsig ~= gsig then r.gsig = gsig; dirty = true end
+          if changed_now then r.t = now; dirty = true end
+          if r.fsig ~= fsig then
+            if r.fsig == nil then
+              -- record from an older version: start from the file's own time
+              if fnewest > (r.t or 0) then r.t = fnewest end
+            else
+              r.t = now  -- the contents of the mod's own config file changed
+            end
+            r.fsig = fsig
+            dirty = true
+          end
         end
       end
     end

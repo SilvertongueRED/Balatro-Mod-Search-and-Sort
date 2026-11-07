@@ -9,7 +9,7 @@ Search, filter and sort your Balatro Mods Menu — without messing up the load o
 - **Sort** — click the **Next:** button to cycle between sort modes. The **Now:** label shows the current one (it is remembered between sessions):
   - **A to Z** — alphabetical by display name (default)
   - **Last Updated** — most recently modified mod files first
-  - **Config Changed**: mods whose settings you changed most recently first. The mod remembers a fingerprint of every mod's settings and notes when one changes (saved in `config/BalatroModSort_cfgtimes.txt`), so changes are picked up the next time the Mods menu is opened. Mods you have not changed since 2.2.3 was installed stay in A to Z order below the changed ones.
+  - **Config Changed**: mods whose settings you changed most recently first. The mod remembers a fingerprint of every mod's settings and notes when one changes (saved in `config/BalatroModSort_cfgtimes.txt`), so changes are picked up the next time the Mods menu is opened. Mods you have not changed since 2.2.3 or newer was installed stay in A to Z order below the changed ones.
 - **Restart prompt** — after you switch a mod on or off, leaving the Mods menu (Back / Esc / B) asks what to do instead of instantly restarting:
   - **Restart now** — closes Balatro and starts it again by itself (Windows: a small hidden helper waits for the game to exit, force-closes it if it hangs, then relaunches the game and checks that it really started: through Steam normally, or by starting the game directly when Steam is still holding its "game running" flag, which can last over a minute after a launch. The helper is started through the Windows Task Scheduler so Steam doesn't think the game is still running; it writes `bms_close_helper.log` in Balatro's save folder)
   - **Later (close game)** — closes the game (force-closing it if it hangs); start it again whenever you like
@@ -26,6 +26,10 @@ Requires [Steamodded](https://github.com/Steamopollys/Steamodded) 1.x.
 Drop the `Balatro-Mod-Search-and-Sort` folder into your Balatro `Mods` directory (requires Steamodded and Lovely).
 
 ## Changelog
+
+### 2.2.4
+- Fixed: **Config Changed** now also notices mods that keep their settings outside Steamodded's config, such as **Trance** (it stores them in its own `config/Trance.lua` and a global `Trance_config`, and only writes the file when the Options menu opens). Changing a Trance colour or font now puts Trance at the top the next time you open the Mods menu. Opening a mod's Options menu without changing anything no longer counts as a change.
+- Trance (and any mod with its own file in the config folder) starts from that file's last saved time instead of "never".
 
 ### 2.2.3
 - Fixed: **Config Changed** sorting did nothing and looked like A to Z. It used the modification time of each mod's config file, but Steamodded rewrites every mod's config file whenever the Mods menu is closed, so all of them had the same time. It now tracks when a mod's settings actually change (Trance, Mod Updater and any other mod with settings) and sorts newest change first.
