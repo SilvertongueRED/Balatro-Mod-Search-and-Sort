@@ -2,6 +2,8 @@
 
 Search, filter and sort your Balatro Mods Menu — without messing up the load order!
 
+![The Mods menu with the sort and filter buttons and the search row](docs/menu-header.png)
+
 ## Features
 
 - **Live search** — type in the **Search** box next to the page selector (bottom of the Mods menu) and the list narrows as you type. It matches the mod's name, id, folder name and author. Type several words and every word has to match. Press **Clear** to empty the box. (Click the box, or press **S** on the keyboard / **R3** (press the right stick) on a controller, to start typing; Esc leaves the box. **Hold** S / R3 for about half a second to clear the search instead. The hints are shown next to the page selector.)
@@ -16,6 +18,18 @@ Search, filter and sort your Balatro Mods Menu — without messing up the load o
   - **Go back** (or Esc / B) — returns to the Mods menu
 
 - **Controller shoulders** — in the Mods menu **LB / RB** turn the mod pages (glyphs shown beside the page selector) and **LT / RT** switch the top tabs Mods / Credits / Config (glyphs shown beside the tab strip), the same way Balatro Mod Updater does it.
+
+### Sort and filter in action
+
+![Cycling the sort modes and the Showing filter, then searching](docs/sort-filter-demo.webp)
+
+### Searching with a controller
+
+Press **R3** and an on-screen keyboard opens, so you can search the Mods menu without a keyboard.
+
+![Searching the Mods menu with the on-screen keyboard](docs/controller-search-demo.webp)
+
+![The search box, page selector and the S / R3 hints](docs/search-bar.png)
 
 The page selector (Page x/y) follows whatever the search / filter / sort currently shows.
 
