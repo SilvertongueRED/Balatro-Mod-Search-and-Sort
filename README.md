@@ -27,6 +27,9 @@ Drop the `Balatro-Mod-Search-and-Sort` folder into your Balatro `Mods` directory
 
 ## Changelog
 
+### 2.2.9
+- Added: a fuller S key trace in bms_s_trace.log (every S press that reaches the game, and every menu piece removed within 1.5 s of it) to find what closes menus when S is pressed in a run.
+
 ### 2.2.8
 - Fixed: **Restart now** did nothing in 2.2.7 (the hidden start script had a typo in its quoting, so the restart helper never ran). The game restarts again, still with no PowerShell window.
 
