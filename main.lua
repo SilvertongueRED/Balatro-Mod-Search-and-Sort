@@ -7,7 +7,7 @@
 --- BADGE_COLOUR: 5A2D82
 --- BADGE_TEXT_COLOUR: FFFFFF
 --- DISPLAY_NAME: Balatro Mod Search and Sort
---- VERSION: 2.2.4
+--- VERSION: 2.2.5
 --- PREFIX: bms
 
 -- Balatro Mod Search and Sort (display-only)
@@ -1967,6 +1967,9 @@ local function _patch_dynamic()
   if mgr and type(mgr.updateDynamicAreas) == "function" and not mgr.__bms_wrapped then
     local old_update = mgr.updateDynamicAreas
     mgr.updateDynamicAreas = function(defs, ...)
+      -- Steamodded queues this as an event; if the Mods menu was closed before it ran there is no overlay left and the
+      -- original would crash on G.OVERLAY_MENU (seen on a boss blind). Nothing to update then.
+      if not G.OVERLAY_MENU then return end
       local result = old_update(defs, ...)
       if type(defs) == "table" and defs.modsList then pcall(_pin_list_top) end
       return result

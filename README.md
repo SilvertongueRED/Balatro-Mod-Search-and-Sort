@@ -27,6 +27,10 @@ Drop the `Balatro-Mod-Search-and-Sort` folder into your Balatro `Mods` directory
 
 ## Changelog
 
+### 2.2.5
+- Fixed: a crash (`attempt to index field 'OVERLAY_MENU' (a nil value)`, in Steamodded's `src/ui.lua`) when the Mods menu was closed while its list was still being updated, seen during a boss blind. The list update now does nothing when the menu is no longer open.
+- New mod icon (it was only in the repository after 2.2.4, now it is in the release package too).
+
 ### 2.2.4
 - Fixed: **Config Changed** now also notices mods that keep their settings outside Steamodded's config, such as **Trance** (it stores them in its own `config/Trance.lua` and a global `Trance_config`, and only writes the file when the Options menu opens). Changing a Trance colour or font now puts Trance at the top the next time you open the Mods menu. Opening a mod's Options menu without changing anything no longer counts as a change.
 - Trance (and any mod with its own file in the config folder) starts from that file's last saved time instead of "never".
