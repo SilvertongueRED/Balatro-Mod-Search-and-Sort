@@ -1685,7 +1685,6 @@ end
 -- Trace: if anything closes a menu within 1.5 s of an S press, write who did it (a call stack) to bms_s_trace.log in
 -- Balatro's save folder. Costs nothing unless that happens.
 local _s_pressed_at = -100
-local _trace_n, _trace_rm = 0, 0
 local function _trace_close(what)
   local now = (G.TIMERS and G.TIMERS.REAL) or 0
   if now - _s_pressed_at > 1.5 then return end
@@ -1703,17 +1702,7 @@ local function _guard_hotkeys()
   Controller._bms_keys = true
   local old_key = Controller.key_press_update
   Controller.key_press_update = function(self, key, ...)
-    if key == "s" then
-      _s_pressed_at = (G.TIMERS and G.TIMERS.REAL) or 0
-      _trace_n = (_trace_n or 0) + 1
-      if _trace_n <= 40 then
-        pcall(function()
-          love.filesystem.append("bms_s_trace.log", string.format("[%.2f] S key reached Controller: stage=%s paused=%s overlay=%s hook=%s\n\n",
-            _s_pressed_at, tostring(G.STAGE), tostring(G.SETTINGS and G.SETTINGS.paused), tostring(G.OVERLAY_MENU ~= nil),
-            tostring(self.text_input_hook ~= nil)))
-        end)
-      end
-    end
+    if key == "s" then _s_pressed_at = (G.TIMERS and G.TIMERS.REAL) or 0 end
     if key == "s" and not self.text_input_hook then
       local ok, done = pcall(_hold_begin, "s")
       if ok and done then return end
@@ -2061,12 +2050,7 @@ local function _install_extras()
   if type(UIBox) == "table" and type(UIBox.remove) == "function" and not UIBox.__bms_traced then
     local old_remove = UIBox.remove
     UIBox.remove = function(self, ...)
-      if G.OVERLAY_MENU ~= nil and self == G.OVERLAY_MENU then _trace_close("overlay menu removed")
-      elseif _trace_rm < 60 and ((G.TIMERS and G.TIMERS.REAL) or 0) - _s_pressed_at <= 1.5 then
-        _trace_rm = _trace_rm + 1
-        local id = self.config and (self.config.id or self.config.name) or "?"
-        pcall(_trace_close, "UIBox removed id=" .. tostring(id))
-      end
+      if G.OVERLAY_MENU ~= nil and self == G.OVERLAY_MENU then _trace_close("overlay menu removed") end
       return old_remove(self, ...)
     end
     UIBox.__bms_traced = true

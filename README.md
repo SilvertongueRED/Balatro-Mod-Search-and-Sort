@@ -27,6 +27,9 @@ Drop the `Balatro-Mod-Search-and-Sort` folder into your Balatro `Mods` directory
 
 ## Changelog
 
+### 2.2.10
+- Removed: the S key trace log (cause found: S is the Save Rewinder mod's default step back key, not Search and Sort).
+
 ### 2.2.9
 - Added: a fuller S key trace in bms_s_trace.log (every S press that reaches the game, and every menu piece removed within 1.5 s of it) to find what closes menus when S is pressed in a run.
 
