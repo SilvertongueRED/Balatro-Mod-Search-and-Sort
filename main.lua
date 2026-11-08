@@ -1208,6 +1208,59 @@ local LAUNCHER_PATH = "bms_launch_helper.ps1"
 
 local function _ps_quote(s) return "'" .. tostring(s):gsub("'", "''") .. "'" end
 
+-- Runs a command with no window at all (CreateProcess with CREATE_NO_WINDOW). os.execute would flash a console and
+-- PowerShell window; this starts the program directly instead. Falls back to os.execute when ffi is not available.
+local _run_hidden = (function()
+
+local function bms_run_hidden(cmd, nowait)
+  local okf, ffi = pcall(require, "ffi")
+  if okf and ffi.os == "Windows" then
+    local ok, rc = pcall(function()
+      pcall(ffi.cdef, [[
+        typedef struct { uint32_t cb; void* a; void* b; void* c; uint32_t x, y, w, h, cw, ch, fill, flags; uint16_t show, res2; void* res3; void* hin; void* hout; void* herr; } BMS_SI;
+        typedef struct { void* hp; void* ht; uint32_t pid, tid; } BMS_PI;
+        int CreateProcessW(const uint16_t*, uint16_t*, void*, void*, int, uint32_t, void*, const uint16_t*, BMS_SI*, BMS_PI*);
+        uint32_t WaitForSingleObject(void*, uint32_t);
+        int GetExitCodeProcess(void*, uint32_t*);
+        int CloseHandle(void*);
+        int MultiByteToWideChar(uint32_t, uint32_t, const char*, int, uint16_t*, int);
+      ]])
+      local C = ffi.C
+      local n = C.MultiByteToWideChar(65001, 0, cmd, #cmd, nil, 0)
+      if n <= 0 then error("could not convert the command") end
+      local buf = ffi.new("uint16_t[?]", n + 1)
+      C.MultiByteToWideChar(65001, 0, cmd, #cmd, buf, n)
+      buf[n] = 0
+      local si = ffi.new("BMS_SI")
+      si.cb = ffi.sizeof("BMS_SI")
+      si.flags = 1   -- STARTF_USESHOWWINDOW
+      si.show = 0    -- SW_HIDE
+      local pi = ffi.new("BMS_PI")
+      if C.CreateProcessW(nil, buf, nil, nil, 0, 0x08000000, nil, nil, si, pi) == 0 then error("CreateProcess failed") end
+      local code = 0
+      if not nowait then
+        C.WaitForSingleObject(pi.hp, 0xFFFFFFFF)
+        local ec = ffi.new("uint32_t[1]")
+        if C.GetExitCodeProcess(pi.hp, ec) ~= 0 then code = tonumber(ec[0]) end
+      end
+      C.CloseHandle(pi.hp)
+      C.CloseHandle(pi.ht)
+      return code
+    end)
+    if ok then return rc end
+  end
+  -- fallback (not Windows, or the direct start failed): the old way, but ask PowerShell to hide itself
+  local c = cmd
+  if c:match("^powershell ") and not c:find("-WindowStyle", 1, true) then
+    c = c:gsub("^powershell ", "powershell -WindowStyle Hidden ", 1)
+  end
+  if nowait then c = 'start "" ' .. c end
+  return os.execute(c)
+end
+
+return bms_run_hidden
+end)()
+
 local function _spawn_close_helper(relaunch)
   if not (love and love.system and love.system.getOS and love.system.getOS() == "Windows") then return false end
   if not (love.filesystem and love.filesystem.write and love.filesystem.getSaveDirectory) then return false end
@@ -1292,11 +1345,24 @@ local function _spawn_close_helper(relaunch)
   if relaunch then
     -- A second tiny script registers and starts the scheduled task (with the
     -- "also run on battery" settings, which the plain schtasks command can't set).
+    -- The scheduled task starts a tiny VBScript (wscript runs without a window) which starts the helper hidden, so no
+    -- PowerShell window flashes up when the game restarts.
+    local VBS = "bms_close_helper.vbs"
+    local vbs_lines = {
+      "Set fso = CreateObject(\"Scripting.FileSystemObject\")",
+      "dir = fso.GetParentFolderName(WScript.ScriptFullName)",
+      "Set sh = CreateObject(\"WScript.Shell\")",
+      "sh.Run \"powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"\"\" & dir & \"\\" .. HELPER_PATH .. "\"\"\"\", 0, False",
+    }
+    local task_exe, task_args = "powershell.exe", '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' .. script .. '"'
+    if pcall(love.filesystem.write, VBS, table.concat(vbs_lines, "\r\n") .. "\r\n") then
+      local vbs_path = (love.filesystem.getSaveDirectory() .. "/" .. VBS):gsub("/", "\\")
+      task_exe, task_args = "wscript.exe", '//B //Nologo "' .. vbs_path .. '"'
+    end
     local launcher = {
       "$ErrorActionPreference = 'Stop'",
       "try {",
-      "  $a = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument " ..
-        _ps_quote('-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' .. script .. '"'),
+      "  $a = New-ScheduledTaskAction -Execute " .. _ps_quote(task_exe) .. " -Argument " .. _ps_quote(task_args),
       "  $s = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable",
       "  Register-ScheduledTask -TaskName '" .. TASK_NAME .. "' -Action $a -Settings $s -Force | Out-Null",
       "  Start-ScheduledTask -TaskName '" .. TASK_NAME .. "'",
@@ -1306,14 +1372,14 @@ local function _spawn_close_helper(relaunch)
     local wrote = pcall(love.filesystem.write, LAUNCHER_PATH, table.concat(launcher, "\r\n") .. "\r\n")
     if wrote then
       local launcher_file = (love.filesystem.getSaveDirectory() .. "/" .. LAUNCHER_PATH):gsub("/", "\\")
-      local okc, rc = pcall(os.execute, 'powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' .. launcher_file .. '"')
+      local okc, rc = pcall(_run_hidden, 'powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' .. launcher_file .. '"')
       ran_ok = okc and ok_code(rc)
     end
   end
   if not ran_ok then
     -- `start` gives the helper its own window (hidden), so it survives the game's
     -- console closing.
-    local okp = pcall(os.execute, 'start "" ' .. ps)
+    local okp = pcall(_run_hidden, ps, true)
     ran_ok = okp
   end
   return ran_ok
@@ -1616,12 +1682,27 @@ local function _hold_tick()
   end
 end
 
+-- Trace: if anything closes a menu within 1.5 s of an S press, write who did it (a call stack) to bms_s_trace.log in
+-- Balatro's save folder. Costs nothing unless that happens.
+local _s_pressed_at = -100
+local function _trace_close(what)
+  local now = (G.TIMERS and G.TIMERS.REAL) or 0
+  if now - _s_pressed_at > 1.5 then return end
+  pcall(function()
+    local line = string.format("[%.2f] %s after S (%.2fs), stage=%s paused=%s hook=%s\n%s\n\n", now, what, now - _s_pressed_at,
+      tostring(G.STAGE), tostring(G.SETTINGS and G.SETTINGS.paused), tostring(G.CONTROLLER and G.CONTROLLER.text_input_hook ~= nil),
+      debug.traceback("", 3))
+    love.filesystem.append("bms_s_trace.log", line)
+  end)
+end
+
 local function _guard_hotkeys()
   if not (Controller and type(Controller.key_press_update) == "function") then return end
   if Controller._bms_keys then return end
   Controller._bms_keys = true
   local old_key = Controller.key_press_update
   Controller.key_press_update = function(self, key, ...)
+    if key == "s" then _s_pressed_at = (G.TIMERS and G.TIMERS.REAL) or 0 end
     if key == "s" and not self.text_input_hook then
       local ok, done = pcall(_hold_begin, "s")
       if ok and done then return end
@@ -1955,6 +2036,49 @@ local function _install_extras()
       _drop_stale_hook()
       return old_exit(e)
     end
+  end
+
+  -- Trace menu closes that follow an S press (see _trace_close).
+  if G.FUNCS.exit_overlay_menu and not G.FUNCS.__bms_traced then
+    local old_eom = G.FUNCS.exit_overlay_menu
+    G.FUNCS.exit_overlay_menu = function(...)
+      _trace_close("exit_overlay_menu")
+      return old_eom(...)
+    end
+    G.FUNCS.__bms_traced = true
+  end
+  if type(UIBox) == "table" and type(UIBox.remove) == "function" and not UIBox.__bms_traced then
+    local old_remove = UIBox.remove
+    UIBox.remove = function(self, ...)
+      if G.OVERLAY_MENU ~= nil and self == G.OVERLAY_MENU then _trace_close("overlay menu removed") end
+      return old_remove(self, ...)
+    end
+    UIBox.__bms_traced = true
+  end
+
+  -- Ask about the restart the moment a mod is switched on or off, not when the Mods menu is left. Steamodded's toggle
+  -- callback only changes SMODS.full_restart, so watch that number once per frame (after the click has finished).
+  if type(Game) == "table" and type(Game.update) == "function" and not Game.__bms_toggle_watch then
+    local old_update = Game.update
+    local last = nil
+    Game.update = function(self, ...)
+      local r = old_update(self, ...)
+      pcall(function()
+        local n = SMODS and SMODS.full_restart
+        if type(n) ~= "number" or not G.OVERLAY_MENU then return end
+        if _prompt_box and G.OVERLAY_MENU == _prompt_box then last = n return end
+        if last == nil then last = n return end
+        if n == last then return end
+        last = n
+        if n ~= 0 and not (G.CONTROLLER and G.CONTROLLER.text_input_hook) then
+          G.ACTIVE_MOD_UI = nil
+          pcall(function() SMODS.save_all_config() end)
+          _show_restart_prompt()
+        end
+      end)
+      return r
+    end
+    Game.__bms_toggle_watch = true
   end
 end
 

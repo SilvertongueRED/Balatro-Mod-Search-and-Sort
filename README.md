@@ -27,6 +27,11 @@ Drop the `Balatro-Mod-Search-and-Sort` folder into your Balatro `Mods` directory
 
 ## Changelog
 
+### 2.2.7
+- Fixed: no PowerShell window flashes up when the game restarts after **Restart now** (same hidden start the Mod Updater uses: no console, and the scheduled task starts a tiny script that runs the helper hidden).
+- Changed: the **Restart now / Later (close game)** prompt now appears the moment you switch a mod on or off, instead of only after you click back or change tab.
+- New: if anything closes the menus within 1.5 seconds of pressing **S**, the call stack is written to `bms_s_trace.log` in Balatro's save folder, so the cause can be found.
+
 ### 2.2.6
 - Fixed: the Mods list sometimes stayed blank for a few seconds when the menu opened (or until you changed page). Steamodded fills the list from an event in the game's main queue, and with many mods that queue can be backed up. The list is now filled on the first frame the menu is up.
 
