@@ -27,6 +27,9 @@ Drop the `Balatro-Mod-Search-and-Sort` folder into your Balatro `Mods` directory
 
 ## Changelog
 
+### 2.2.6
+- Fixed: the Mods list sometimes stayed blank for a few seconds when the menu opened (or until you changed page). Steamodded fills the list from an event in the game's main queue, and with many mods that queue can be backed up. The list is now filled on the first frame the menu is up.
+
 ### 2.2.5
 - Fixed: a crash (`attempt to index field 'OVERLAY_MENU' (a nil value)`, in Steamodded's `src/ui.lua`) when the Mods menu was closed while its list was still being updated, seen during a boss blind. The list update now does nothing when the menu is no longer open.
 - New mod icon (it was only in the repository after 2.2.4, now it is in the release package too).

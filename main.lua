@@ -550,6 +550,7 @@ local function _reset_search_state()
   _filter_mode = "all"
   _pager_args = nil
   _refresh_pending = false
+  _search.filled = false   -- set once the list has been built for this Mods menu
   _ts_cache = { updated = {}, config = {} }
 end
 
@@ -1795,6 +1796,16 @@ local function _install_extras()
 
   -- Runs every frame on a node in the search row: re-filter when the text changed.
   G.FUNCS.bms_search_watch = function(_e)
+    -- Steamodded fills the list from an event in the game's main queue. When that queue is backed up (many mods) the list stays
+    -- blank for a few seconds, or until you change page. Fill it from here, on the first frame the menu is up, instead.
+    if not _search.filled and G.OVERLAY_MENU and G.OVERLAY_MENU.get_UIE_by_ID and G.FUNCS.update_mod_list then
+      pcall(function()
+        if G.OVERLAY_MENU:get_UIE_by_ID("modsList") then
+          _search.filled = true
+          G.FUNCS.update_mod_list({ cycle_config = {} })
+        end
+      end)
+    end
     _heal_list_if_displaced()
     -- Safety net for the filter/sort buttons: if the controller has lost its focus while the
     -- Mods menu is open (e.g. the list is empty), put it back on the button the player used.
@@ -1971,7 +1982,7 @@ local function _patch_dynamic()
       -- original would crash on G.OVERLAY_MENU (seen on a boss blind). Nothing to update then.
       if not G.OVERLAY_MENU then return end
       local result = old_update(defs, ...)
-      if type(defs) == "table" and defs.modsList then pcall(_pin_list_top) end
+      if type(defs) == "table" and defs.modsList then _search.filled = true; pcall(_pin_list_top) end
       return result
     end
     mgr.__bms_wrapped = true
