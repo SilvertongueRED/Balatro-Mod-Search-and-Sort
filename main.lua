@@ -1352,7 +1352,7 @@ local function _spawn_close_helper(relaunch)
       "Set fso = CreateObject(\"Scripting.FileSystemObject\")",
       "dir = fso.GetParentFolderName(WScript.ScriptFullName)",
       "Set sh = CreateObject(\"WScript.Shell\")",
-      "sh.Run \"powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"\"\" & dir & \"\\" .. HELPER_PATH .. "\"\"\"\", 0, False",
+      "sh.Run \"powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"\"\" & dir & \"\\" .. HELPER_PATH .. "\"\"\", 0, False",
     }
     local task_exe, task_args = "powershell.exe", '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' .. script .. '"'
     if pcall(love.filesystem.write, VBS, table.concat(vbs_lines, "\r\n") .. "\r\n") then

@@ -27,6 +27,9 @@ Drop the `Balatro-Mod-Search-and-Sort` folder into your Balatro `Mods` directory
 
 ## Changelog
 
+### 2.2.8
+- Fixed: **Restart now** did nothing in 2.2.7 (the hidden start script had a typo in its quoting, so the restart helper never ran). The game restarts again, still with no PowerShell window.
+
 ### 2.2.7
 - Fixed: no PowerShell window flashes up when the game restarts after **Restart now** (same hidden start the Mod Updater uses: no console, and the scheduled task starts a tiny script that runs the helper hidden).
 - Changed: the **Restart now / Later (close game)** prompt now appears the moment you switch a mod on or off, instead of only after you click back or change tab.
